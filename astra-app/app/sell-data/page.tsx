@@ -1,65 +1,76 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
-import { ChevronDown, X, Wallet, User, Shield, DollarSign, Check, ArrowRight } from "lucide-react"
-
-declare global {
-  interface Window {
-    ethereum?: any
-  }
-}
+import { ChevronDown, X, Wallet, User, Shield, DollarSign, Check, ArrowRight, LogOut } from "lucide-react"
+import { useWalletConnection, useAstraVault, useCompanyPayout } from "@/lib/hooks"
+import { VALID_TAGS, ValidTag } from "@/lib/blockchain"
 
 export default function SellDataPage() {
   const [currentStep, setCurrentStep] = useState(1)
-  const [walletAddress, setWalletAddress] = useState("")
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<ValidTag[]>([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [profileApproved, setProfileApproved] = useState(false)
-  const [vaultCreated, setVaultCreated] = useState(false)
-  const [earnings, setEarnings] = useState(0)
-  const [isWalletConnected, setIsWalletConnected] = useState(false)
+
+  // Blockchain hooks
+  const { address, isConnected, connect, connectors, isPending: isConnecting, disconnect } = useWalletConnection()
+  const { 
+    hasVault, 
+    hasVaultLoading, 
+    userTags, 
+    userTagsLoading, 
+    createVault, 
+    isCreatingVault,
+    addTag,
+    isAddingTag
+  } = useAstraVault()
+  const { 
+    pendingRewards, 
+    pendingRewardsLoading, 
+    claimRewards, 
+    isClaimingRewards 
+  } = useCompanyPayout()
 
   const steps = [
     { id: 1, title: "Connect Wallet", description: "Add your wallet address" },
     { id: 2, title: "Select Tags", description: "Choose what describes you best" },
     { id: 3, title: "Create Vault", description: "Sign transaction to create your Data Vault" },
-    { id: 4, title: "Start Earning", description: "Earn USDC from data queries" }
+    { id: 4, title: "Start Earning", description: "Earn FLOW from data queries" }
   ]
 
-  const availableTags = [
-    "crypto enthusiast", "defi user", "nft collector", "gaming", "travel lover", 
-    "fashion conscious", "tech savvy", "fitness focused", "foodie", "music lover",
-    "book reader", "creative", "entrepreneur", "student", "professional",
-    "early adopter", "content creator", "community builder", "learner", "explorer"
-  ]
-
-  const connectWallet = async () => {
-    try {
-      if (typeof window.ethereum !== 'undefined') {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
-        const account = accounts[0]
-        setWalletAddress(account)
-        setIsWalletConnected(true)
-        setCurrentStep(2)
-      } else {
-        alert('Please install MetaMask to use this feature')
-      }
-    } catch (error) {
-      console.error('Error connecting wallet:', error)
-      alert('Failed to connect wallet')
-    }
-  }
-
-  const handleConnectWallet = () => {
-    if (isWalletConnected) {
+  // Handle step advancement based on state changes
+  useEffect(() => {
+    if (isConnected && currentStep === 1) {
       setCurrentStep(2)
     }
+  }, [isConnected, currentStep])
+
+  useEffect(() => {
+    if (hasVault && currentStep === 3) {
+      setCurrentStep(4)
+    }
+  }, [hasVault, currentStep])
+
+  // Handle wallet disconnection
+  useEffect(() => {
+    if (!isConnected && currentStep > 1) {
+      setCurrentStep(1)
+      setSelectedTags([])
+    }
+  }, [isConnected, currentStep])
+
+  const handleConnectWallet = () => {
+    if (connectors.length > 0) {
+      connect({ connector: connectors[0] })
+    }
   }
 
-  const handleTagToggle = (tag: string) => {
+  const handleDisconnectWallet = () => {
+    disconnect()
+  }
+
+  const handleTagToggle = (tag: ValidTag) => {
     if (selectedTags.includes(tag)) {
       setSelectedTags(selectedTags.filter(t => t !== tag))
     } else {
@@ -67,25 +78,45 @@ export default function SellDataPage() {
     }
   }
 
-  const handleRemoveTag = (tagToRemove: string) => {
+  const handleRemoveTag = (tagToRemove: ValidTag) => {
     setSelectedTags(selectedTags.filter(tag => tag !== tagToRemove))
   }
 
   const handleApproveProfile = () => {
     if (selectedTags.length > 0) {
-      setProfileApproved(true)
       setCurrentStep(3)
     }
   }
 
   const handleCreateVault = () => {
-    setVaultCreated(true)
-    setCurrentStep(4)
-    setEarnings(8.50)
+    if (selectedTags.length > 0) {
+      createVault(selectedTags, {
+        onSuccess: () => {
+          setCurrentStep(4)
+        },
+        onError: (error) => {
+          console.error('Failed to create vault:', error)
+          alert('Failed to create vault. Please try again.')
+        }
+      })
+    }
   }
 
   const handleClaimEarnings = () => {
-    setEarnings(0)
+    claimRewards(undefined, {
+      onError: (error) => {
+        console.error('Failed to claim rewards:', error)
+        alert('Failed to claim rewards. Please try again.')
+      }
+    })
+  }
+
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`
+  }
+
+  const formatRewards = (rewards: bigint) => {
+    return Number(rewards) / 1e18 // Convert from wei to FLOW
   }
 
   return (
@@ -100,6 +131,30 @@ export default function SellDataPage() {
             Transform your digital footprint into a valuable asset. Our privacy-preserving technology ensures your data never leaves your device.
           </p>
         </div>
+
+        {/* Wallet Status Bar */}
+        {isConnected && (
+          <div className="mb-8">
+            <Card className="bg-slate-800/50 border border-white/20 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-white font-medium">Wallet Connected</span>
+                  <span className="text-slate-300 text-sm">{address && formatAddress(address)}</span>
+                </div>
+                <Button
+                  onClick={handleDisconnectWallet}
+                  variant="outline"
+                  size="sm"
+                  className="border-red-400 text-red-400 hover:bg-red-400/10 hover:border-red-300"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Disconnect
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Progress Steps */}
         <div className="mb-16">
@@ -144,23 +199,24 @@ export default function SellDataPage() {
                 </div>
                 
                 <div className="space-y-6">
-                  {!isWalletConnected ? (
+                  {!isConnected ? (
                     <Button
-                      onClick={connectWallet}
-                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white"
+                      onClick={handleConnectWallet}
+                      disabled={isConnecting}
+                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white disabled:opacity-50"
                     >
-                      Connect MetaMask Wallet
+                      {isConnecting ? "Connecting..." : "Connect MetaMask Wallet"}
                     </Button>
                   ) : (
                     <div className="space-y-4">
                       <div className="bg-gradient-to-r from-blue-500/20 to-blue-600/20 border border-white rounded-xl p-4">
                         <div className="text-center">
                           <div className="text-lg font-bold text-white">Wallet Connected</div>
-                          <div className="text-sm text-slate-300">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</div>
+                          <div className="text-sm text-slate-300">{address && formatAddress(address)}</div>
                         </div>
                       </div>
                       <Button
-                        onClick={handleConnectWallet}
+                        onClick={() => setCurrentStep(2)}
                         className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white"
                       >
                         Continue with Connected Wallet
@@ -226,7 +282,7 @@ export default function SellDataPage() {
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-white rounded-xl shadow-2xl z-10 max-h-64 overflow-y-auto">
                         <div className="p-4">
                           <div className="grid grid-cols-2 gap-2">
-                            {availableTags.map((tag) => (
+                            {VALID_TAGS.map((tag) => (
                               <button
                                 key={tag}
                                 onClick={() => handleTagToggle(tag)}
@@ -284,9 +340,10 @@ export default function SellDataPage() {
 
                 <Button
                   onClick={handleCreateVault}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white"
+                  disabled={isCreatingVault}
+                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white disabled:opacity-50"
                 >
-                  Create Data Vault
+                  {isCreatingVault ? "Creating Vault..." : "Create Data Vault"}
                 </Button>
               </div>
             </Card>
@@ -301,27 +358,32 @@ export default function SellDataPage() {
                 </div>
                 <h2 className="text-3xl font-bold text-white mb-4">Start Earning!</h2>
                 <p className="text-lg text-slate-300 max-w-xl mx-auto">
-                  Congratulations! Your Data Vault is now live. You'll earn USDC micropayments every time your data is included in a company's query.
+                  Congratulations! Your Data Vault is now live. You'll earn FLOW micropayments every time your data is included in a company's query.
                 </p>
                 
                 <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-white rounded-xl p-6">
                   <h3 className="font-medium text-white mb-4">Your Earnings Dashboard</h3>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-green-400">${earnings.toFixed(2)}</div>
+                      <div className="text-3xl font-bold text-green-400">
+                        {pendingRewardsLoading ? "Loading..." : `${formatRewards(pendingRewards || 0n).toFixed(4)} FLOW`}
+                      </div>
                       <div className="text-sm text-slate-300">Available to Claim</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-blue-400">0</div>
-                      <div className="text-sm text-slate-300">Data Queries</div>
+                      <div className="text-3xl font-bold text-blue-400">
+                        {userTagsLoading ? "Loading..." : userTags?.length || 0}
+                      </div>
+                      <div className="text-sm text-slate-300">Active Tags</div>
                     </div>
                   </div>
-                  {earnings > 0 && (
+                  {pendingRewards && pendingRewards > 0n && (
                     <Button
                       onClick={handleClaimEarnings}
-                      className="w-full mt-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg border border-white"
+                      disabled={isClaimingRewards}
+                      className="w-full mt-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg border border-white disabled:opacity-50"
                     >
-                      Claim Earnings
+                      {isClaimingRewards ? "Claiming..." : "Claim Earnings"}
                     </Button>
                   )}
                 </div>
@@ -345,7 +407,7 @@ export default function SellDataPage() {
                       <div className="w-12 h-12 bg-gradient-to-r from-green-500/20 to-green-600/20 rounded-full mx-auto mb-3 flex items-center justify-center border border-white">
                         <span className="text-green-400 font-bold text-lg">3</span>
                       </div>
-                      <p className="text-sm text-slate-300">USDC automatically added to your balance</p>
+                      <p className="text-sm text-slate-300">FLOW automatically added to your balance</p>
                     </div>
                   </div>
                 </div>

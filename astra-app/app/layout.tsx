@@ -4,6 +4,7 @@ import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import "./globals.css"
 import Navigation from "@/components/navigation"
+import { Providers } from "@/components/providers"
 
 export const metadata: Metadata = {
   title: "Astra - Your Data is an Asset",
@@ -28,8 +29,10 @@ html {
         `}</style>
       </head>
       <body>
-        <Navigation />
-        {children}
+        <Providers>
+          <Navigation />
+          {children}
+        </Providers>
       </body>
     </html>
   )
