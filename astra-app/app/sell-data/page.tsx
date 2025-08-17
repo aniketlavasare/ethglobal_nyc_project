@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
-import { ChevronDown, X, Wallet, User, Shield, DollarSign, Check, ArrowRight, LogOut, Edit, Plus, Minus } from "lucide-react"
+import { ChevronDown, X, Wallet, User, Shield, DollarSign, Check, ArrowRight, LogOut, Edit, Plus, Minus, AlertCircle } from "lucide-react"
 import { useWalletConnection, useAstraVault, useCompanyPayout } from "@/lib/hooks"
 import { VALID_TAGS, ValidTag } from "@/lib/blockchain"
 
@@ -13,12 +13,11 @@ export default function SellDataPage() {
   const [selectedTags, setSelectedTags] = useState<ValidTag[]>([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isEditingTags, setIsEditingTags] = useState(false)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
 
   // Blockchain hooks
   const { address, isConnected, connect, connectors, isPending: isConnecting, disconnect } = useWalletConnection()
   const { 
-    vaultInfo,
-    vaultInfoLoading,
     hasVault, 
     hasVaultLoading, 
     userTags, 
@@ -29,8 +28,7 @@ export default function SellDataPage() {
     isAddingTag,
     removeTag,
     isRemovingTag,
-    refetchVaultInfo,
-    refetchUserTagsFromChain
+    refetchUserTags
   } = useAstraVault()
   const { 
     pendingRewards, 
@@ -50,6 +48,7 @@ export default function SellDataPage() {
   useEffect(() => {
     if (isConnected && currentStep === 1) {
       setCurrentStep(2)
+      setConnectionError(null) // Clear any previous errors
     }
   }, [isConnected, currentStep])
 
@@ -69,14 +68,27 @@ export default function SellDataPage() {
     }
   }, [hasVault, userTags, isEditingTags])
 
-  const handleConnectWallet = () => {
+  const handleConnectWallet = async () => {
     if (connectors.length > 0) {
-      connect({ connector: connectors[0] })
+      try {
+        setConnectionError(null)
+        await connect({ connector: connectors[0] })
+      } catch (error) {
+        console.error('Connection error:', error)
+        if (error instanceof Error) {
+          setConnectionError(error.message)
+        } else {
+          setConnectionError('Failed to connect wallet. Please try again.')
+        }
+      }
+    } else {
+      setConnectionError('No wallet connectors available. Please install MetaMask.')
     }
   }
 
   const handleDisconnectWallet = () => {
     disconnect()
+    setConnectionError(null)
   }
 
   const handleTagToggle = (tag: ValidTag) => {
@@ -151,7 +163,7 @@ export default function SellDataPage() {
     return Number(rewards) / 1e18 // Convert from wei to FLOW
   }
 
-  const isLoading = vaultInfoLoading || hasVaultLoading || userTagsLoading
+  const isLoading = hasVaultLoading || userTagsLoading
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-purple-900/60 to-slate-900">
@@ -232,6 +244,19 @@ export default function SellDataPage() {
                   </p>
                 </div>
                 
+                {/* Connection Error Display */}
+                {connectionError && (
+                  <div className="bg-red-500/20 border border-red-400 rounded-xl p-4">
+                    <div className="flex items-center gap-3 text-red-400">
+                      <AlertCircle className="w-5 h-5" />
+                      <span className="font-medium">{connectionError}</span>
+                    </div>
+                    <div className="mt-2 text-sm text-red-300">
+                      Make sure MetaMask is installed and unlocked. The app will automatically add Flow EVM Testnet to your MetaMask.
+                    </div>
+                  </div>
+                )}
+                
                 <div className="space-y-6">
                   {!isConnected ? (
                     <Button
@@ -257,6 +282,29 @@ export default function SellDataPage() {
                       </Button>
                     </div>
                   )}
+                </div>
+
+                {/* MetaMask Setup Instructions */}
+                <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-white rounded-xl p-6">
+                  <h3 className="font-medium text-white mb-3">MetaMask Setup:</h3>
+                  <div className="grid grid-cols-1 gap-4 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                      <span className="text-slate-300">Install MetaMask extension if not already installed</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                      <span className="text-slate-300">Unlock MetaMask and ensure it's active</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                      <span className="text-slate-300">The app will automatically add Flow EVM Testnet</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                      <span className="text-slate-300">Approve the connection when prompted</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -452,7 +500,7 @@ export default function SellDataPage() {
                   <div className="grid grid-cols-2 gap-6">
                     <div className="text-center">
                       <div className="text-3xl font-bold text-green-400">
-                        {pendingRewardsLoading ? "Loading..." : `${formatRewards(pendingRewards || 0n).toFixed(4)} FLOW`}
+                        {pendingRewardsLoading ? "Loading..." : `${formatRewards(pendingRewards || BigInt(0)).toFixed(4)} FLOW`}
                       </div>
                       <div className="text-sm text-slate-300">Available to Claim</div>
                     </div>
@@ -463,7 +511,7 @@ export default function SellDataPage() {
                       <div className="text-sm text-slate-300">Active Tags</div>
                     </div>
                   </div>
-                  {pendingRewards && pendingRewards > 0n && (
+                  {pendingRewards && pendingRewards > BigInt(0) && (
                     <Button
                       onClick={handleClaimEarnings}
                       disabled={isClaimingRewards}

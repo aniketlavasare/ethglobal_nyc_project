@@ -8,13 +8,18 @@ import { CreditCard, Users, Search, FileText, Gift, Check, ChevronDown, X, Arrow
 import { useWalletConnection, useSearchUsers, useCompanyPayout } from "@/lib/hooks"
 import { VALID_TAGS, ValidTag } from "@/lib/blockchain"
 import { flowToWei } from "@/lib/utils"
-import { VaultInfo } from "@/lib/vault-registry"
+
+interface SearchResult {
+  address: string
+  tags: ValidTag[]
+  matchScore: number
+}
 
 export default function BuyDataPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [selectedTags, setSelectedTags] = useState<ValidTag[]>([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [searchResults, setSearchResults] = useState<VaultInfo[]>([])
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchCost, setSearchCost] = useState(0)
   const [isSearching, setIsSearching] = useState(false)
 
@@ -76,9 +81,9 @@ export default function BuyDataPage() {
     setIsSearching(true)
     
     try {
-      // Search for vaults with selected tags
+      // Search for users with selected tags
       searchUsers(selectedTags, {
-        onSuccess: (results: VaultInfo[]) => {
+        onSuccess: (results: SearchResult[]) => {
           setSearchResults(results)
           setSearchCost(results.length * 0.001) // 0.001 FLOW per user
           setCurrentStep(3)
@@ -99,7 +104,7 @@ export default function BuyDataPage() {
   const handleCompleteQuery = () => {
     if (searchResults.length === 0) return
 
-    const userAddresses = searchResults.map(result => result.userAddress)
+    const userAddresses = searchResults.map(result => result.address)
     const totalValue = flowToWei(searchCost)
 
     // Buy access to user data
@@ -395,22 +400,22 @@ export default function BuyDataPage() {
                 <div className="space-y-4">
                   <h3 className="text-xl font-bold text-white">Matching Users</h3>
                   <div className="grid gap-4">
-                    {searchResults.map((vault, index) => (
+                    {searchResults.map((user, index) => (
                       <Card key={index} className="bg-slate-700 border border-white p-6 hover:border-purple-500 transition-all duration-300">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg border border-white">
-                              {vault.userAddress.charAt(2).toUpperCase()}
+                              {user.address.charAt(2).toUpperCase()}
                             </div>
                             <div>
-                              <div className="font-bold text-white text-lg">{formatAddress(vault.userAddress)}</div>
+                              <div className="font-bold text-white text-lg">{formatAddress(user.address)}</div>
                               <div className="text-sm text-slate-300">
-                                Vault: {formatAddress(vault.vaultAddress)}
+                                Match Score: {(user.matchScore * 100).toFixed(0)}%
                               </div>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {vault.tags.slice(0, 3).map((tag: string, tagIndex: number) => (
+                            {user.tags.slice(0, 3).map((tag: string, tagIndex: number) => (
                               <span
                                 key={tagIndex}
                                 className="px-3 py-1 text-xs rounded-full text-white bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg border border-white"
@@ -418,11 +423,6 @@ export default function BuyDataPage() {
                                 {tag}
                               </span>
                             ))}
-                            {vault.tags.length > 3 && (
-                              <span className="px-3 py-1 text-xs rounded-full text-slate-300 bg-slate-600 border border-white">
-                                +{vault.tags.length - 3} more
-                              </span>
-                            )}
                           </div>
                         </div>
                       </Card>

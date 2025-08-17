@@ -1,0 +1,16 @@
+{
+  "vaults": [
+    {
+      "userAddress": "0xed5bb505acee303af37583940b9675e525c557ca",
+      "vaultAddress": "0xa7915a1c2399e21ed240dce95914931b22889cd9",
+      "tags": [
+        "professional",
+        "learner"
+      ],
+      "createdAt": 1755429231231,
+      "lastUpdated": 1755429231231,
+      "isActive": true
+    }
+  ],
+  "lastUpdated": 1755429231231
+}
