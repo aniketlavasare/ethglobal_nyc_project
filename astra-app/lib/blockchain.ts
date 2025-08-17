@@ -23,8 +23,8 @@ export const flowTestnet = {
 
 // Contract addresses (you'll need to update these after deployment)
 export const CONTRACT_ADDRESSES = {
-  ASTRA_VAULT: '0x...', // Replace with actual deployed address
-  COMPANY_PAYOUT: '0x...', // Replace with actual deployed address
+  ASTRA_VAULT: '0xa7915a1C2399e21ed240dce95914931b22889cd9', // Replace with actual deployed address
+  COMPANY_PAYOUT: '0x138298574c415fe487bb11548deC8bf416698d9F', // Replace with actual deployed address
 } as const
 
 // Valid tags that can be used in the vault

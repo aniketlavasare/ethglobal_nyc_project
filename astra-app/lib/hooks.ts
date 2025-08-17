@@ -1,22 +1,46 @@
 'use client'
 
-import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt, useWatchAccount } from 'wagmi'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ASTRA_VAULT_ABI, COMPANY_PAYOUT_ABI, CONTRACT_ADDRESSES, VALID_TAGS, ValidTag } from './blockchain'
+import { useEffect, useState } from 'react'
 
-// Wallet connection hook
+// Wallet connection hook with improved account switching
 export function useWalletConnection() {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, status } = useAccount()
   const { connect, connectors, isPending } = useConnect()
   const { disconnect } = useDisconnect()
+  const [previousAddress, setPreviousAddress] = useState<string | undefined>()
+
+  // Watch for account changes
+  const watchedAccount = useWatchAccount()
+
+  // Handle account switching
+  useEffect(() => {
+    if (watchedAccount?.address && watchedAccount.address !== previousAddress) {
+      setPreviousAddress(watchedAccount.address)
+      // Trigger a small delay to ensure state updates properly
+      setTimeout(() => {
+        window.location.reload()
+      }, 100)
+    }
+  }, [watchedAccount?.address, previousAddress])
+
+  // Get available connectors
+  const availableConnectors = connectors.filter(connector => connector.ready)
 
   return {
     address,
     isConnected,
+    status,
     connect,
-    connectors,
+    connectors: availableConnectors,
     isPending,
-    disconnect
+    disconnect,
+    isConnecting: isPending,
+    isDisconnected: status === 'disconnected',
+    isConnecting: status === 'connecting',
+    isReconnecting: status === 'reconnecting'
   }
 }
 
@@ -26,13 +50,14 @@ export function useAstraVault() {
   const queryClient = useQueryClient()
 
   // Check if user has a vault
-  const { data: hasVault, isLoading: hasVaultLoading } = useReadContract({
+  const { data: hasVault, isLoading: hasVaultLoading, refetch: refetchHasVault } = useReadContract({
     address: CONTRACT_ADDRESSES.ASTRA_VAULT,
     abi: ASTRA_VAULT_ABI,
     functionName: 'hasVault',
     args: address ? [address] : undefined,
     query: {
       enabled: !!address,
+      refetchInterval: 5000, // Refetch every 5 seconds
     },
   })
 
@@ -46,6 +71,7 @@ export function useAstraVault() {
       return data.user?.tags || []
     },
     enabled: !!address,
+    refetchInterval: 5000, // Refetch every 5 seconds
   })
 
   // Create vault mutation
@@ -82,6 +108,7 @@ export function useAstraVault() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userTags', address] })
+      refetchHasVault()
     },
   })
 
@@ -128,6 +155,7 @@ export function useAstraVault() {
     userTags: userTags as ValidTag[],
     userTagsLoading,
     refetchUserTags,
+    refetchHasVault,
     createVault: createVaultMutation.mutate,
     isCreatingVault: isCreatingVault || createVaultMutation.isPending,
     addTag: addTagMutation.mutate,
@@ -147,6 +175,7 @@ export function useCompanyPayout() {
     args: address ? [address] : undefined,
     query: {
       enabled: !!address,
+      refetchInterval: 5000, // Refetch every 5 seconds
     },
   })
 

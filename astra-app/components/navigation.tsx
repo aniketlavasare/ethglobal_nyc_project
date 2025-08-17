@@ -2,46 +2,46 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
-
-declare global {
-  interface Window {
-    ethereum?: any
-  }
-}
+import { useWalletConnection } from "@/lib/hooks"
+import { Wallet, LogOut } from "lucide-react"
 
 export default function Navigation() {
   const pathname = usePathname()
-  const [isWalletConnected, setIsWalletConnected] = useState(false)
-  const [walletAddress, setWalletAddress] = useState("")
+  const { 
+    address, 
+    isConnected, 
+    connect, 
+    connectors, 
+    disconnect,
+    isConnecting,
+    isReconnecting 
+  } = useWalletConnection()
 
-  const connectWallet = async () => {
-    try {
-      if (typeof window.ethereum !== 'undefined') {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
-        const account = accounts[0]
-        setWalletAddress(account)
-        setIsWalletConnected(true)
-      } else {
-        alert('Please install MetaMask to use this feature')
-      }
-    } catch (error) {
-      console.error('Error connecting wallet:', error)
-      alert('Failed to connect wallet')
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`
+  }
+
+  const handleConnect = () => {
+    if (connectors.length > 0) {
+      connect({ connector: connectors[0] })
     }
   }
 
+  const handleDisconnect = () => {
+    disconnect()
+  }
+
   return (
-                <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-xl border-b border-white/10">
-              <div className="max-w-6xl mx-auto px-4 py-2">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-xl border-b border-white/10">
+      <div className="max-w-6xl mx-auto px-4 py-2">
         <div className="flex items-center justify-between">
-                            <Link
-                    href="/"
-                    className="text-2xl font-bold tracking-wide"
-                  >
-                    <img src="/logo.svg" alt="ASTRA" className="h-16" />
-                  </Link>
+          <Link
+            href="/"
+            className="text-2xl font-bold tracking-wide"
+          >
+            <img src="/logo.svg" alt="ASTRA" className="h-16" />
+          </Link>
 
           <div className="flex items-center gap-8">
             <Link
@@ -70,19 +70,33 @@ export default function Navigation() {
             </Link>
             
             {/* Wallet Connection */}
-            {!isWalletConnected ? (
+            {!isConnected ? (
               <Button
-                onClick={connectWallet}
-                className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-700 hover:from-blue-500 hover:via-purple-500 hover:to-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 hover:scale-105 shadow-lg shadow-blue-500/30 border border-blue-400/20 text-sm"
+                onClick={handleConnect}
+                disabled={isConnecting || isReconnecting}
+                className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-700 hover:from-blue-500 hover:via-purple-500 hover:to-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 hover:scale-105 shadow-lg shadow-blue-500/30 border border-blue-400/20 text-sm disabled:opacity-50"
               >
-                Connect Wallet
+                <Wallet className="w-4 h-4 mr-2" />
+                {isConnecting || isReconnecting ? "Connecting..." : "Connect Wallet"}
               </Button>
             ) : (
-              <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-400/20 rounded-lg p-3">
-                <div className="text-center">
-                  <div className="text-sm font-bold text-green-400">Connected</div>
-                  <div className="text-xs text-slate-300">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</div>
+              <div className="flex items-center gap-3">
+                <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-400/20 rounded-lg p-3">
+                  <div className="text-center">
+                    <div className="text-sm font-bold text-green-400">Connected</div>
+                    <div className="text-xs text-slate-300 font-mono">
+                      {address && formatAddress(address)}
+                    </div>
+                  </div>
                 </div>
+                <Button
+                  onClick={handleDisconnect}
+                  variant="outline"
+                  size="sm"
+                  className="border-red-400 text-red-400 hover:bg-red-400/10 hover:border-red-300 transition-all duration-200"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
               </div>
             )}
           </div>

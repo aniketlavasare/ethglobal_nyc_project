@@ -4,10 +4,11 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
-import { CreditCard, Users, Search, FileText, Gift, Check, ChevronDown, X, ArrowRight, Wallet, LogOut } from "lucide-react"
+import { CreditCard, Users, Search, FileText, Gift, Check, ChevronDown, X, ArrowRight, Wallet } from "lucide-react"
 import { useWalletConnection, useSearchUsers, useCompanyPayout } from "@/lib/hooks"
 import { VALID_TAGS, ValidTag } from "@/lib/blockchain"
 import { flowToWei } from "@/lib/utils"
+import { WalletStatus, WalletConnectionPrompt } from "@/components/wallet-status"
 
 interface SearchResult {
   address: string
@@ -24,7 +25,16 @@ export default function BuyDataPage() {
   const [isSearching, setIsSearching] = useState(false)
 
   // Blockchain hooks
-  const { address, isConnected, connect, connectors, isPending: isConnecting, disconnect } = useWalletConnection()
+  const { 
+    address, 
+    isConnected, 
+    status, 
+    connect, 
+    connectors, 
+    isPending: isConnecting,
+    isConnecting: isWalletConnecting,
+    isReconnecting 
+  } = useWalletConnection()
   const { searchUsers, searchResults: apiSearchResults, isSearching: isApiSearching, error: searchError } = useSearchUsers()
   const { buyAccess, isBuyingAccess } = useCompanyPayout()
 
@@ -43,7 +53,7 @@ export default function BuyDataPage() {
     }
   }, [isConnected, currentStep])
 
-  // Handle wallet disconnection
+  // Handle wallet disconnection and account switching
   useEffect(() => {
     if (!isConnected && currentStep > 1) {
       setCurrentStep(1)
@@ -60,7 +70,11 @@ export default function BuyDataPage() {
   }
 
   const handleDisconnectWallet = () => {
-    disconnect()
+    // Reset all state when disconnecting
+    setCurrentStep(1)
+    setSelectedTags([])
+    setSearchResults([])
+    setSearchCost(0)
   }
 
   const handleTagToggle = (tag: ValidTag) => {
@@ -141,28 +155,13 @@ export default function BuyDataPage() {
         </div>
 
         {/* Wallet Status Bar */}
-        {isConnected && (
-          <div className="mb-8">
-            <Card className="bg-slate-800/50 border border-white/20 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-white font-medium">Wallet Connected</span>
-                  <span className="text-slate-300 text-sm">{address && formatAddress(address)}</span>
-                </div>
-                <Button
-                  onClick={handleDisconnectWallet}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-400 text-red-400 hover:bg-red-400/10 hover:border-red-300"
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Disconnect
-                </Button>
-              </div>
-            </Card>
-          </div>
-        )}
+        <div className="mb-8">
+          {isConnected ? (
+            <WalletStatus onDisconnect={handleDisconnectWallet} />
+          ) : (
+            <WalletConnectionPrompt />
+          )}
+        </div>
 
         {/* Progress Steps */}
         <div className="mb-16">
@@ -208,10 +207,10 @@ export default function BuyDataPage() {
                   {!isConnected ? (
                     <Button
                       onClick={handleConnectWallet}
-                      disabled={isConnecting}
+                      disabled={isConnecting || isWalletConnecting || isReconnecting}
                       className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white disabled:opacity-50"
                     >
-                      {isConnecting ? "Connecting..." : "Connect MetaMask Wallet"}
+                      {isConnecting || isWalletConnecting || isReconnecting ? "Connecting..." : "Connect MetaMask Wallet"}
                     </Button>
                   ) : (
                     <div className="space-y-4">
