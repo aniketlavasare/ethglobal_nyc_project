@@ -23,9 +23,8 @@ export const flowTestnet = {
 
 // Contract addresses (you'll need to update these after deployment)
 export const CONTRACT_ADDRESSES = {
-  VAULT_REGISTRY: '0x...', // Replace with actual deployed VaultRegistry address
-  ASTRA_VAULT: '0x...', // Replace with actual deployed AstraVault address
-  COMPANY_PAYOUT: '0x...', // Replace with actual deployed CompanyPayout address
+  ASTRA_VAULT: '0xa7915a1C2399e21ed240dce95914931b22889cd9', // Replace with actual deployed address
+  COMPANY_PAYOUT: '0x138298574c415fe487bb11548deC8bf416698d9F', // Replace with actual deployed address
 } as const
 
 // Valid tags that can be used in the vault
@@ -51,67 +50,8 @@ export const config = createConfig({
   },
 })
 
-// Vault Registry ABI
-export const VAULT_REGISTRY_ABI = [
-  {
-    "inputs": [{"internalType": "address", "name": "_astraVault", "type": "address"}],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  {
-    "inputs": [],
-    "name": "getAllVaults",
-    "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "address", "name": "user", "type": "address"}],
-    "name": "getVaultForUser",
-    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "address", "name": "vaultAddress", "type": "address"}],
-    "name": "getUserForVault",
-    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "address", "name": "user", "type": "address"}],
-    "name": "hasVault",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getVaultCount",
-    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "startIndex", "type": "uint256"},
-      {"internalType": "uint256", "name": "endIndex", "type": "uint256"}
-    ],
-    "name": "getVaultsByRange",
-    "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const
-
-// Astra Vault ABI (updated with new functions)
+// Contract ABIs
 export const ASTRA_VAULT_ABI = [
-  {
-    "inputs": [{"internalType": "address", "name": "_vaultRegistry", "type": "address"}],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
   {
     "inputs": [{"internalType": "string[]", "name": "tags", "type": "string[]"}],
     "name": "createVault",
@@ -160,24 +100,9 @@ export const ASTRA_VAULT_ABI = [
     "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
     "stateMutability": "view",
     "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getAllUsersWithVaults",
-    "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "string[]", "name": "searchTags", "type": "string[]"}],
-    "name": "getUsersByTags",
-    "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
-    "stateMutability": "view",
-    "type": "function"
   }
 ] as const
 
-// Company Payout ABI (unchanged)
 export const COMPANY_PAYOUT_ABI = [
   {
     "inputs": [

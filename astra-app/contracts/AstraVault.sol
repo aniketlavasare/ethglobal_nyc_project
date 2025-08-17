@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "./VaultRegistry.sol";
-
 contract AstraVaultUserOwned {
-    VaultRegistry public immutable vaultRegistry;
-    
     // user => tags
     mapping(address => string[]) private _userTags;
     mapping(address => bool) private _hasVault;
@@ -17,10 +13,6 @@ contract AstraVaultUserOwned {
     event TagAdded(address indexed user, string tag, uint256 timestamp);
     event TagRemoved(address indexed user, string tag, uint256 timestamp);
     event VaultCleared(address indexed user, uint256 timestamp);
-
-    constructor(address _vaultRegistry) {
-        vaultRegistry = VaultRegistry(_vaultRegistry);
-    }
 
     // -------- user actions --------
 
@@ -37,10 +29,6 @@ contract AstraVaultUserOwned {
         }
 
         _hasVault[msg.sender] = true;
-        
-        // Register this vault in the registry
-        vaultRegistry.registerVault(msg.sender, address(this));
-        
         emit VaultCreated(msg.sender, _userTags[msg.sender], block.timestamp);
     }
 
@@ -93,54 +81,6 @@ contract AstraVaultUserOwned {
     /// @notice Has this user created a vault?
     function hasVault(address user) external view returns (bool) {
         return _hasVault[user];
-    }
-
-    /// @notice Get all users with vaults (for search functionality)
-    function getAllUsersWithVaults() external view returns (address[] memory) {
-        address[] memory allVaults = vaultRegistry.getAllVaults();
-        address[] memory users = new address[](allVaults.length);
-        
-        for (uint256 i = 0; i < allVaults.length; i++) {
-            users[i] = vaultRegistry.getUserForVault(allVaults[i]);
-        }
-        
-        return users;
-    }
-
-    /// @notice Get users by tags (for search functionality)
-    function getUsersByTags(string[] calldata searchTags) external view returns (address[] memory) {
-        address[] memory allVaults = vaultRegistry.getAllVaults();
-        address[] memory matchingUsers = new address[](allVaults.length);
-        uint256 matchCount = 0;
-        
-        for (uint256 i = 0; i < allVaults.length; i++) {
-            address user = vaultRegistry.getUserForVault(allVaults[i]);
-            string[] memory userTags = _userTags[user];
-            
-            // Check if user has any of the search tags
-            bool hasMatchingTag = false;
-            for (uint256 j = 0; j < searchTags.length; j++) {
-                for (uint256 k = 0; k < userTags.length; k++) {
-                    if (_eq(userTags[k], searchTags[j])) {
-                        hasMatchingTag = true;
-                        break;
-                    }
-                }
-                if (hasMatchingTag) break;
-            }
-            
-            if (hasMatchingTag) {
-                matchingUsers[matchCount] = user;
-                matchCount++;
-            }
-        }
-        
-        // Resize array to actual match count
-        assembly {
-            mstore(matchingUsers, matchCount)
-        }
-        
-        return matchingUsers;
     }
 
     // -------- internals --------

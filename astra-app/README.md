@@ -1,287 +1,154 @@
-# ASTRA - Blockchain Data Marketplace
+# ASTRA - Web3 Data Marketplace
 
-A decentralized data marketplace built on Flow EVM Testnet that allows users to monetize their data while maintaining privacy, and companies to access high-quality audience data through fair, pay-per-use smart contracts.
+Transform your digital footprint into profit with ASTRA, a Web3 platform where data ownership meets financial opportunity.
 
-## 🚀 Features
+## Features
 
-### For Users (Data Sellers)
-- **Secure Data Vaults**: Create personal data vaults on the blockchain
-- **Tag-Based Profiles**: Define yourself with up to 10 behavioral/interest tags
-- **Privacy-Preserving**: Your data never leaves your device, only tags are stored
-- **Automatic Earnings**: Earn FLOW tokens when companies query your data
-- **Vault Management**: Edit, update, and manage your data profile
-- **Real-time Rewards**: View and claim pending earnings instantly
+- **True Data Ownership**: Your data profile lives in your crypto wallet, controlled only by you
+- **Granular Control**: Decide exactly what data goes into your vault with local analysis
+- **Direct Monetization**: Earn FLOW tokens when companies access your pseudonymous data
+- **Fair Pay-per-Use**: Companies pay only for the data they use with transparent smart contracts
 
-### For Companies (Data Buyers)
-- **Audience Targeting**: Search for users based on behavioral tags
-- **Pay-Per-Use Model**: Pay only for the data you access (0.001 FLOW per user)
-- **Smart Contract Payments**: Automated, transparent payment distribution
-- **Quality Data**: Access verified, on-chain user profiles
-- **Real-time Results**: Get instant access to matching user addresses
+## Tech Stack
 
-## 🏗️ Architecture
+- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
+- **Blockchain**: Wagmi, Viem, Flow EVM Testnet
+- **Smart Contracts**: Solidity (AstraVault, CompanyPayout)
+- **Backend**: Next.js API Routes with local file storage
 
-### Smart Contracts
+## Smart Contracts
 
-#### 1. VaultRegistry (`VaultRegistry.sol`)
-- **Purpose**: Central registry for all user vaults
-- **Key Functions**:
-  - `registerVault(user, vaultAddress)`: Register new vaults
-  - `getAllVaults()`: Get all registered vault addresses
-  - `getVaultForUser(user)`: Get vault address for a user
-  - `getUserForVault(vaultAddress)`: Get user address for a vault
-  - `hasVault(user)`: Check if user has a registered vault
+### AstraVault.sol
+- Allows users to create and manage their data vault
+- Stores user tags on-chain with privacy controls
+- Only the vault owner can modify their data
 
-#### 2. AstraVault (`AstraVault.sol`)
-- **Purpose**: Individual user data vaults
-- **Key Functions**:
-  - `createVault(tags[])`: Create vault with initial tags
-  - `addTag(tag)`: Add new tag to existing vault
-  - `removeTag(tag)`: Remove tag from vault
-  - `clearVault()`: Clear all tags (vault remains)
-  - `getMyTags()`: Get user's own tags
-  - `getUserTags(user)`: Get any user's public tags
-  - `getUsersByTags(searchTags[])`: Search users by tags
+### CompanyAccessPayout.sol
+- Handles payments from companies to users
+- Distributes FLOW tokens to users whose data is accessed
+- Transparent, automated payout system
 
-#### 3. CompanyPayout (`CompanyAccessPayout.sol`)
-- **Purpose**: Handle payments and rewards
-- **Key Functions**:
-  - `buyAccess(tag, users[], value)`: Purchase access to user data
-  - `claimRewards()`: Claim pending FLOW rewards
-  - `pendingRewards(address)`: Check pending rewards for user
+## Setup Instructions
 
-### Frontend Architecture
+### 1. Install Dependencies
 
-#### Blockchain Integration (`lib/hooks.ts`)
-- **useWalletConnection()**: MetaMask wallet connection
-- **useVaultRegistry()**: Vault registry interactions
-- **useAstraVault()**: Individual vault management
-- **useCompanyPayout()**: Payment and reward handling
-- **useSearchUsers()**: User search functionality
-- **useBlockchainData()**: Blockchain data fetching utilities
-
-#### API Routes (`app/api/blockchain/`)
-- **getUserTags**: Get user tags from blockchain
-- **getUserForVault**: Get user address for vault
-- **getUsersByTags**: Search users by tags
-
-## 🛠️ Tech Stack
-
-- **Frontend**: Next.js 15, React 19, TypeScript
-- **Styling**: Tailwind CSS, shadcn/ui components
-- **Blockchain**: Flow EVM Testnet, Wagmi, Viem
-- **Smart Contracts**: Solidity 0.8.24
-- **State Management**: React Query (TanStack Query)
-- **Wallet Integration**: MetaMask, WalletConnect
-
-## 📋 Prerequisites
-
-- Node.js 18+ 
-- MetaMask browser extension
-- Flow EVM Testnet FLOW tokens for gas fees
-
-## 🚀 Quick Start
-
-### 1. Clone and Install
 ```bash
-git clone <repository-url>
-cd astra-app
 npm install
 ```
 
 ### 2. Deploy Smart Contracts
 
-#### Deploy VaultRegistry
-```bash
-# Deploy VaultRegistry first
-npx hardhat deploy --contract VaultRegistry
-```
+1. Deploy `AstraVault.sol` to Flow EVM Testnet
+2. Deploy `CompanyAccessPayout.sol` to Flow EVM Testnet
+3. Update contract addresses in `lib/blockchain.ts`:
 
-#### Deploy AstraVault
-```bash
-# Deploy AstraVault with VaultRegistry address
-npx hardhat deploy --contract AstraVault --args <VAULT_REGISTRY_ADDRESS>
-```
-
-#### Deploy CompanyPayout
-```bash
-# Deploy CompanyPayout
-npx hardhat deploy --contract CompanyPayout
-```
-
-### 3. Update Contract Addresses
-Update the contract addresses in `lib/blockchain.ts`:
 ```typescript
 export const CONTRACT_ADDRESSES = {
-  VAULT_REGISTRY: '0x...', // Your deployed VaultRegistry address
   ASTRA_VAULT: '0x...', // Your deployed AstraVault address
   COMPANY_PAYOUT: '0x...', // Your deployed CompanyPayout address
 } as const
 ```
 
-### 4. Configure WalletConnect (Optional)
-Update the WalletConnect project ID in `lib/blockchain.ts`:
+### 3. Configure WalletConnect (Optional)
+
+If you want to use WalletConnect, update the project ID in `lib/blockchain.ts`:
+
 ```typescript
 walletConnect({ projectId: 'your-project-id' })
 ```
 
-### 5. Start Development Server
+### 4. Run Development Server
+
 ```bash
 npm run dev
 ```
 
-## 📖 Usage Guide
+Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+## Usage
 
 ### For Users (Sell Data)
 
-1. **Connect Wallet**
-   - Visit `/sell-data`
-   - Connect MetaMask wallet
-   - Ensure you have FLOW tokens for gas fees
-
-2. **Create Data Vault**
-   - Select up to 10 tags that describe you
-   - Sign transaction to create vault on blockchain
-   - Vault is automatically registered in VaultRegistry
-
-3. **Manage Profile**
-   - View existing tags
-   - Edit tags to improve your profile
-   - Update vault with new tags
-
-4. **Earn Rewards**
-   - View pending FLOW earnings
-   - Claim rewards when companies access your data
-   - Monitor your earnings dashboard
+1. **Connect Wallet**: Connect your MetaMask wallet to the platform
+2. **Select Tags**: Choose behavioral tags that describe your interests
+3. **Create Vault**: Sign a transaction to create your data vault on-chain
+4. **Start Earning**: Earn FLOW tokens when companies query your data
 
 ### For Companies (Buy Data)
 
-1. **Connect Wallet**
-   - Visit `/buy-data`
-   - Connect MetaMask wallet
-   - Ensure you have FLOW tokens for payments
+1. **Connect Wallet**: Connect your MetaMask wallet to access the marketplace
+2. **Build Audience**: Select tags to define your target audience
+3. **Execute Query**: Search for users matching your criteria
+4. **Purchase Access**: Pay FLOW tokens to access user data
+5. **Reward Users**: FLOW is automatically distributed to matching users
 
-2. **Define Target Audience**
-   - Select behavioral/interest tags
-   - Define your ideal customer profile
-   - Preview search cost (0.001 FLOW per matching user)
+## API Endpoints
 
-3. **Execute Query**
-   - Search for users matching your criteria
-   - Review matching users and their tags
-   - Confirm payment amount
+### `/api/users`
 
-4. **Purchase Access**
-   - Pay FLOW tokens to access user data
-   - FLOW is automatically distributed to users
-   - Receive list of matching user addresses
+- `GET ?action=search&tags=tag1,tag2` - Search users by tags
+- `GET ?action=get&address=0x...` - Get user data by address
+- `GET ?action=list` - List all users (admin)
+- `POST` - Create or update user data
 
-## 🔧 Configuration
+## Data Storage
 
-### Environment Variables
-Create `.env.local`:
-```env
-NEXT_PUBLIC_FLOW_TESTNET_RPC=https://testnet.flow.evm.flow.com
-NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=your-project-id
+User data is stored locally in `data/users.json` for simplicity. In production, this should be replaced with a proper database.
+
+## Valid Tags
+
+The following tags are supported for user profiles:
+
+- crypto enthusiast, defi user, nft collector, gaming, travel lover
+- fashion conscious, tech savvy, fitness focused, foodie, music lover
+- book reader, creative, entrepreneur, student, professional
+- early adopter, content creator, community builder, learner, explorer
+
+## Pricing
+
+- **Cost per User**: 0.001 FLOW per user whose data is accessed
+- **Payment**: FLOW tokens distributed directly to users
+- **No Hidden Fees**: Transparent, pay-per-use model
+
+## Development
+
+### Project Structure
+
+```
+astra-app/
+├── app/                    # Next.js app directory
+│   ├── api/               # API routes
+│   ├── buy-data/          # Company data purchase flow
+│   └── sell-data/         # User data selling flow
+├── components/            # React components
+├── contracts/            # Smart contracts
+├── lib/                  # Utilities and configuration
+│   ├── blockchain.ts     # Blockchain configuration
+│   ├── backend.ts        # Backend services
+│   ├── hooks.ts          # Custom React hooks
+│   └── utils.ts          # Utility functions
+└── public/               # Static assets
 ```
 
-### Network Configuration
-The app is configured for Flow EVM Testnet by default. To change networks, update `lib/blockchain.ts`.
+### Key Files
 
-## 📊 Data Flow
+- `lib/blockchain.ts` - Wagmi configuration and contract ABIs
+- `lib/hooks.ts` - Custom hooks for blockchain interactions
+- `lib/backend.ts` - Backend services for user data management
+- `app/api/users/route.ts` - API endpoints for user operations
 
-### User Data Flow
-1. User connects wallet
-2. User selects tags and creates vault
-3. Vault is registered in VaultRegistry
-4. User can edit tags and manage profile
-5. User earns FLOW when companies query their data
-
-### Company Data Flow
-1. Company connects wallet
-2. Company selects target tags
-3. System searches blockchain for matching users
-4. Company pays FLOW for access
-5. FLOW is distributed to matching users
-6. Company receives user addresses
-
-## 🔒 Security Features
-
-- **Privacy-Preserving**: Only tags are stored on-chain, not personal data
-- **User Control**: Users own their vaults and can modify tags anytime
-- **Transparent Payments**: All payments handled by smart contracts
-- **No Data Leakage**: User addresses only shared after payment
-- **Immutable Records**: All transactions recorded on blockchain
-
-## 🧪 Testing
-
-### Smart Contract Testing
-```bash
-npx hardhat test
-```
-
-### Frontend Testing
-```bash
-npm run test
-```
-
-### E2E Testing
-```bash
-npm run test:e2e
-```
-
-## 📈 Valid Tags
-
-The system supports the following predefined tags:
-- crypto enthusiast, defi user, nft collector, gaming
-- travel lover, fashion conscious, tech savvy
-- fitness focused, foodie, music lover
-- book reader, creative, entrepreneur
-- student, professional, early adopter
-- content creator, community builder, learner, explorer
-
-## 💰 Pricing Model
-
-- **Cost per User**: 0.001 FLOW
-- **Payment Distribution**: 100% to users whose data is accessed
-- **Gas Fees**: User pays for vault creation/updates
-- **Company Fees**: Company pays for data access
-
-## 🚧 Development Notes
-
-### Contract Deployment Order
-1. Deploy VaultRegistry
-2. Deploy AstraVault (with VaultRegistry address)
-3. Deploy CompanyPayout
-4. Update frontend contract addresses
-
-### Important Considerations
-- VaultRegistry is the central authority for vault management
-- Each user can only have one vault
-- Tags are limited to 10 per user
-- All blockchain data is fetched in real-time
-- No local caching of sensitive user data
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
-2. Create feature branch
-3. Make changes
-4. Add tests
-5. Submit pull request
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-## 📄 License
+## License
 
 MIT License - see LICENSE file for details
 
-## 🆘 Support
+## Support
 
-For issues and questions:
-- Create GitHub issue
-- Check documentation
-- Review smart contract code
-- Test with Flow EVM Testnet first
-
----
-
-**Note**: This is a testnet implementation. For production use, deploy to Flow mainnet and implement additional security measures.
+For support and questions, please open an issue on GitHub.

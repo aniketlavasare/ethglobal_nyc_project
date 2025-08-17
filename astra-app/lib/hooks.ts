@@ -2,14 +2,7 @@
 
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { 
-  ASTRA_VAULT_ABI, 
-  COMPANY_PAYOUT_ABI, 
-  VAULT_REGISTRY_ABI,
-  CONTRACT_ADDRESSES, 
-  VALID_TAGS, 
-  ValidTag 
-} from './blockchain'
+import { ASTRA_VAULT_ABI, COMPANY_PAYOUT_ABI, CONTRACT_ADDRESSES, VALID_TAGS, ValidTag } from './blockchain'
 
 // Wallet connection hook
 export function useWalletConnection() {
@@ -27,15 +20,15 @@ export function useWalletConnection() {
   }
 }
 
-// Vault Registry interactions
-export function useVaultRegistry() {
+// Astra Vault contract interactions
+export function useAstraVault() {
   const { address } = useAccount()
   const queryClient = useQueryClient()
 
-  // Check if user has a vault in registry
-  const { data: hasVault, isLoading: hasVaultLoading, refetch: refetchHasVault } = useReadContract({
-    address: CONTRACT_ADDRESSES.VAULT_REGISTRY,
-    abi: VAULT_REGISTRY_ABI,
+  // Check if user has a vault
+  const { data: hasVault, isLoading: hasVaultLoading } = useReadContract({
+    address: CONTRACT_ADDRESSES.ASTRA_VAULT,
+    abi: ASTRA_VAULT_ABI,
     functionName: 'hasVault',
     args: address ? [address] : undefined,
     query: {
@@ -43,65 +36,16 @@ export function useVaultRegistry() {
     },
   })
 
-  // Get user's vault address
-  const { data: userVaultAddress, isLoading: userVaultAddressLoading } = useReadContract({
-    address: CONTRACT_ADDRESSES.VAULT_REGISTRY,
-    abi: VAULT_REGISTRY_ABI,
-    functionName: 'getVaultForUser',
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!address && hasVault,
+  // Get user's tags
+  const { data: userTags, isLoading: userTagsLoading, refetch: refetchUserTags } = useQuery({
+    queryKey: ['userTags', address],
+    queryFn: async () => {
+      if (!address) return []
+      const result = await fetch(`/api/users?action=get&address=${address}`)
+      const data = await result.json()
+      return data.user?.tags || []
     },
-  })
-
-  // Get all vaults count
-  const { data: vaultCount, isLoading: vaultCountLoading } = useReadContract({
-    address: CONTRACT_ADDRESSES.VAULT_REGISTRY,
-    abi: VAULT_REGISTRY_ABI,
-    functionName: 'getVaultCount',
-    query: {
-      enabled: true,
-    },
-  })
-
-  // Get all vault addresses
-  const { data: allVaults, isLoading: allVaultsLoading } = useReadContract({
-    address: CONTRACT_ADDRESSES.VAULT_REGISTRY,
-    abi: VAULT_REGISTRY_ABI,
-    functionName: 'getAllVaults',
-    query: {
-      enabled: true,
-    },
-  })
-
-  return {
-    hasVault: hasVault as boolean,
-    hasVaultLoading,
-    refetchHasVault,
-    userVaultAddress: userVaultAddress as string,
-    userVaultAddressLoading,
-    vaultCount: vaultCount as bigint,
-    vaultCountLoading,
-    allVaults: allVaults as `0x${string}`[],
-    allVaultsLoading,
-  }
-}
-
-// Astra Vault contract interactions
-export function useAstraVault() {
-  const { address } = useAccount()
-  const { userVaultAddress, hasVault } = useVaultRegistry()
-  const queryClient = useQueryClient()
-
-  // Get user's tags from their vault
-  const { data: userTags, isLoading: userTagsLoading, refetch: refetchUserTags } = useReadContract({
-    address: userVaultAddress as `0x${string}`,
-    abi: ASTRA_VAULT_ABI,
-    functionName: 'getMyTags',
-    args: [],
-    query: {
-      enabled: !!userVaultAddress && hasVault,
-    },
+    enabled: !!address,
   })
 
   // Create vault mutation
@@ -123,10 +67,20 @@ export function useAstraVault() {
         args: [validTags],
       })
 
+      // Store user data in backend
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, tags: validTags }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to store user data')
+      }
+
       return validTags
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vaultRegistry', address] })
       queryClient.invalidateQueries({ queryKey: ['userTags', address] })
     },
   })
@@ -136,60 +90,32 @@ export function useAstraVault() {
 
   const addTagMutation = useMutation({
     mutationFn: async (tag: string) => {
-      if (!address || !userVaultAddress) throw new Error('Wallet not connected or no vault')
+      if (!address) throw new Error('Wallet not connected')
       if (!VALID_TAGS.includes(tag as ValidTag)) throw new Error('Invalid tag')
 
       // Add tag on blockchain
       await addTag({
-        address: userVaultAddress as `0x${string}`,
+        address: CONTRACT_ADDRESSES.ASTRA_VAULT,
         abi: ASTRA_VAULT_ABI,
         functionName: 'addTag',
         args: [tag],
       })
 
-      return tag
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userTags', address] })
-    },
-  })
-
-  // Remove tag mutation
-  const { writeContract: removeTag, isPending: isRemovingTag } = useWriteContract()
-
-  const removeTagMutation = useMutation({
-    mutationFn: async (tag: string) => {
-      if (!address || !userVaultAddress) throw new Error('Wallet not connected or no vault')
-
-      // Remove tag on blockchain
-      await removeTag({
-        address: userVaultAddress as `0x${string}`,
-        abi: ASTRA_VAULT_ABI,
-        functionName: 'removeTag',
-        args: [tag],
+      // Update user data in backend
+      const currentTags = userTags || []
+      const newTags = [...currentTags, tag]
+      
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, tags: newTags }),
       })
 
-      return tag
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userTags', address] })
-    },
-  })
+      if (!response.ok) {
+        throw new Error('Failed to update user data')
+      }
 
-  // Clear vault mutation
-  const { writeContract: clearVault, isPending: isClearingVault } = useWriteContract()
-
-  const clearVaultMutation = useMutation({
-    mutationFn: async () => {
-      if (!address || !userVaultAddress) throw new Error('Wallet not connected or no vault')
-
-      // Clear vault on blockchain
-      await clearVault({
-        address: userVaultAddress as `0x${string}`,
-        abi: ASTRA_VAULT_ABI,
-        functionName: 'clearVault',
-        args: [],
-      })
+      return newTags
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userTags', address] })
@@ -198,18 +124,14 @@ export function useAstraVault() {
 
   return {
     hasVault: hasVault as boolean,
-    userVaultAddress: userVaultAddress as string,
-    userTags: userTags as string[],
+    hasVaultLoading,
+    userTags: userTags as ValidTag[],
     userTagsLoading,
     refetchUserTags,
     createVault: createVaultMutation.mutate,
     isCreatingVault: isCreatingVault || createVaultMutation.isPending,
     addTag: addTagMutation.mutate,
     isAddingTag: isAddingTag || addTagMutation.isPending,
-    removeTag: removeTagMutation.mutate,
-    isRemovingTag: isRemovingTag || removeTagMutation.isPending,
-    clearVault: clearVaultMutation.mutate,
-    isClearingVault: isClearingVault || clearVaultMutation.isPending,
   }
 }
 
@@ -272,105 +194,23 @@ export function useCompanyPayout() {
   }
 }
 
-// Search users hook - now using blockchain data
+// Search users hook
 export function useSearchUsers() {
-  const { allVaults, allVaultsLoading } = useVaultRegistry()
-  const queryClient = useQueryClient()
-
-  // Get all users with vaults
-  const { data: allUsers, isLoading: allUsersLoading } = useQuery({
-    queryKey: ['allUsersWithVaults'],
-    queryFn: async () => {
-      if (!allVaults || allVaults.length === 0) return []
-      
-      // Get user addresses for all vaults
-      const userPromises = allVaults.map(async (vaultAddress: `0x${string}`) => {
-        const result = await fetch(`/api/blockchain/getUserForVault?vaultAddress=${vaultAddress}`)
-        const data = await result.json()
-        return data.userAddress
-      })
-      
-      return Promise.all(userPromises)
-    },
-    enabled: !!allVaults && allVaults.length > 0,
-  })
-
-  // Search users by tags
   const searchUsersMutation = useMutation({
     mutationFn: async (tags: ValidTag[]) => {
-      if (!allUsers || allUsers.length === 0) return []
-
-      // Get tags for all users
-      const userDataPromises = allUsers.map(async (userAddress: string) => {
-        const result = await fetch(`/api/blockchain/getUserTags?userAddress=${userAddress}`)
-        const data = await result.json()
-        return {
-          address: userAddress,
-          tags: data.tags || []
-        }
-      })
-
-      const userData = await Promise.all(userDataPromises)
-
-      // Filter users by tags
-      const matchingUsers = userData.filter((user) => {
-        return tags.some(searchTag => user.tags.includes(searchTag))
-      })
-
-      // Calculate match scores
-      const results = matchingUsers.map((user) => {
-        const matchingTags = user.tags.filter((tag: string) => tags.includes(tag as ValidTag))
-        const matchScore = matchingTags.length / tags.length
-        return {
-          address: user.address,
-          tags: user.tags,
-          matchScore
-        }
-      })
-
-      // Sort by match score
-      results.sort((a, b) => b.matchScore - a.matchScore)
-
-      return results
+      const response = await fetch(`/api/users?action=search&tags=${tags.join(',')}`)
+      if (!response.ok) {
+        throw new Error('Failed to search users')
+      }
+      const data = await response.json()
+      return data.results
     },
   })
 
   return {
-    allUsers: allUsers as string[],
-    allUsersLoading,
     searchUsers: searchUsersMutation.mutate,
     searchResults: searchUsersMutation.data,
     isSearching: searchUsersMutation.isPending,
     error: searchUsersMutation.error,
-  }
-}
-
-// Blockchain data fetching utilities
-export function useBlockchainData() {
-  // Get user tags from blockchain
-  const getUserTags = async (userAddress: string) => {
-    const result = await fetch(`/api/blockchain/getUserTags?userAddress=${userAddress}`)
-    const data = await result.json()
-    return data.tags || []
-  }
-
-  // Get user for vault from blockchain
-  const getUserForVault = async (vaultAddress: string) => {
-    const result = await fetch(`/api/blockchain/getUserForVault?vaultAddress=${vaultAddress}`)
-    const data = await result.json()
-    return data.userAddress
-  }
-
-  // Get users by tags from blockchain
-  const getUsersByTags = async (tags: string[]) => {
-    const result = await fetch(`/api/blockchain/getUsersByTags?tags=${tags.join(',')}`)
-    const data = await result.json()
-    return data.users || []
-  }
-
-  return {
-    getUserTags,
-    getUserForVault,
-    getUsersByTags,
   }
 }
