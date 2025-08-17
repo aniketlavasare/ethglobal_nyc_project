@@ -4,28 +4,21 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
-import { ChevronDown, X, Wallet, User, Shield, DollarSign, Check, ArrowRight } from "lucide-react"
+import { ChevronDown, X, Wallet, User, Shield, DollarSign, Check, ArrowRight, LogOut, Edit, Plus, Minus } from "lucide-react"
 import { useWalletConnection, useAstraVault, useCompanyPayout } from "@/lib/hooks"
 import { VALID_TAGS, ValidTag } from "@/lib/blockchain"
-import { WalletStatus, WalletConnectionPrompt } from "@/components/wallet-status"
 
 export default function SellDataPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [selectedTags, setSelectedTags] = useState<ValidTag[]>([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isEditingTags, setIsEditingTags] = useState(false)
 
   // Blockchain hooks
+  const { address, isConnected, connect, connectors, isPending: isConnecting, disconnect } = useWalletConnection()
   const { 
-    address, 
-    isConnected, 
-    status, 
-    connect, 
-    connectors, 
-    isPending: isConnecting,
-    isConnecting: isWalletConnecting,
-    isReconnecting 
-  } = useWalletConnection()
-  const { 
+    vaultInfo,
+    vaultInfoLoading,
     hasVault, 
     hasVaultLoading, 
     userTags, 
@@ -34,8 +27,10 @@ export default function SellDataPage() {
     isCreatingVault,
     addTag,
     isAddingTag,
-    refetchHasVault,
-    refetchUserTags
+    removeTag,
+    isRemovingTag,
+    refetchVaultInfo,
+    refetchUserTagsFromChain
   } = useAstraVault()
   const { 
     pendingRewards, 
@@ -46,8 +41,8 @@ export default function SellDataPage() {
 
   const steps = [
     { id: 1, title: "Connect Wallet", description: "Add your wallet address" },
-    { id: 2, title: "Select Tags", description: "Choose what describes you best" },
-    { id: 3, title: "Create Vault", description: "Sign transaction to create your Data Vault" },
+    { id: 2, title: "Manage Tags", description: "Select or modify your data tags" },
+    { id: 3, title: "Create/Update Vault", description: "Sign transaction to create or update your Data Vault" },
     { id: 4, title: "Start Earning", description: "Earn FLOW from data queries" }
   ]
 
@@ -58,27 +53,21 @@ export default function SellDataPage() {
     }
   }, [isConnected, currentStep])
 
-  useEffect(() => {
-    if (hasVault && currentStep === 3) {
-      setCurrentStep(4)
-    }
-  }, [hasVault, currentStep])
-
-  // Handle wallet disconnection and account switching
+  // Handle wallet disconnection
   useEffect(() => {
     if (!isConnected && currentStep > 1) {
       setCurrentStep(1)
       setSelectedTags([])
+      setIsEditingTags(false)
     }
   }, [isConnected, currentStep])
 
-  // Refetch data when wallet connects
+  // Load existing tags when vault exists
   useEffect(() => {
-    if (isConnected && address) {
-      refetchHasVault()
-      refetchUserTags()
+    if (hasVault && userTags && userTags.length > 0 && !isEditingTags) {
+      setSelectedTags(userTags as ValidTag[])
     }
-  }, [isConnected, address, refetchHasVault, refetchUserTags])
+  }, [hasVault, userTags, isEditingTags])
 
   const handleConnectWallet = () => {
     if (connectors.length > 0) {
@@ -87,16 +76,16 @@ export default function SellDataPage() {
   }
 
   const handleDisconnectWallet = () => {
-    // Reset all state when disconnecting
-    setCurrentStep(1)
-    setSelectedTags([])
+    disconnect()
   }
 
   const handleTagToggle = (tag: ValidTag) => {
     if (selectedTags.includes(tag)) {
       setSelectedTags(selectedTags.filter(t => t !== tag))
     } else {
-      setSelectedTags([...selectedTags, tag])
+      if (selectedTags.length < 10) { // Max 10 tags
+        setSelectedTags([...selectedTags, tag])
+      }
     }
   }
 
@@ -104,14 +93,35 @@ export default function SellDataPage() {
     setSelectedTags(selectedTags.filter(tag => tag !== tagToRemove))
   }
 
-  const handleApproveProfile = () => {
+  const handleStartEditing = () => {
+    setIsEditingTags(true)
+    setSelectedTags(userTags as ValidTag[] || [])
+  }
+
+  const handleSaveTags = () => {
     if (selectedTags.length > 0) {
       setCurrentStep(3)
     }
   }
 
-  const handleCreateVault = () => {
-    if (selectedTags.length > 0) {
+  const handleCreateOrUpdateVault = () => {
+    if (selectedTags.length === 0) return
+
+    if (hasVault) {
+      // Update existing vault - for now, we'll recreate it
+      // In a real implementation, you might want to add/remove individual tags
+      createVault(selectedTags, {
+        onSuccess: () => {
+          setCurrentStep(4)
+          setIsEditingTags(false)
+        },
+        onError: (error) => {
+          console.error('Failed to update vault:', error)
+          alert('Failed to update vault. Please try again.')
+        }
+      })
+    } else {
+      // Create new vault
       createVault(selectedTags, {
         onSuccess: () => {
           setCurrentStep(4)
@@ -141,6 +151,8 @@ export default function SellDataPage() {
     return Number(rewards) / 1e18 // Convert from wei to FLOW
   }
 
+  const isLoading = vaultInfoLoading || hasVaultLoading || userTagsLoading
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-purple-900/60 to-slate-900">
       {/* Header */}
@@ -155,13 +167,28 @@ export default function SellDataPage() {
         </div>
 
         {/* Wallet Status Bar */}
-        <div className="mb-8">
-          {isConnected ? (
-            <WalletStatus onDisconnect={handleDisconnectWallet} />
-          ) : (
-            <WalletConnectionPrompt />
-          )}
-        </div>
+        {isConnected && (
+          <div className="mb-8">
+            <Card className="bg-slate-800/50 border border-white/20 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-white font-medium">Wallet Connected</span>
+                  <span className="text-slate-300 text-sm">{address && formatAddress(address)}</span>
+                </div>
+                <Button
+                  onClick={handleDisconnectWallet}
+                  variant="outline"
+                  size="sm"
+                  className="border-red-400 text-red-400 hover:bg-red-400/10 hover:border-red-300"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Disconnect
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Progress Steps */}
         <div className="mb-16">
@@ -209,10 +236,10 @@ export default function SellDataPage() {
                   {!isConnected ? (
                     <Button
                       onClick={handleConnectWallet}
-                      disabled={isConnecting || isWalletConnecting || isReconnecting}
+                      disabled={isConnecting}
                       className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white disabled:opacity-50"
                     >
-                      {isConnecting || isWalletConnecting || isReconnecting ? "Connecting..." : "Connect MetaMask Wallet"}
+                      {isConnecting ? "Connecting..." : "Connect MetaMask Wallet"}
                     </Button>
                   ) : (
                     <div className="space-y-4">
@@ -235,7 +262,7 @@ export default function SellDataPage() {
             </Card>
           )}
 
-          {/* Step 2: Select Tags */}
+          {/* Step 2: Manage Tags */}
           {currentStep === 2 && (
             <Card className="bg-slate-800 border border-white shadow-2xl shadow-purple-500/20 p-12 max-w-3xl mx-auto">
               <div className="space-y-8">
@@ -243,95 +270,147 @@ export default function SellDataPage() {
                   <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-purple-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-6 border border-white">
                     <User className="w-10 h-10 text-white" />
                   </div>
-                  <h2 className="text-3xl font-bold text-white mb-4">Select What Describes You Best</h2>
+                  <h2 className="text-3xl font-bold text-white mb-4">
+                    {hasVault ? "Manage Your Data Tags" : "Select What Describes You Best"}
+                  </h2>
                   <p className="text-lg text-slate-300">
-                    Choose tags that represent your interests and behaviors. These will be used to create your anonymous profile.
+                    {hasVault 
+                      ? "Update your existing tags or add new ones to improve your data profile."
+                      : "Choose tags that represent your interests and behaviors. These will be used to create your anonymous profile."
+                    }
                   </p>
                 </div>
 
-                <div className="space-y-6">
-                  <div className="relative">
-                    <div
-                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                      className="w-full px-6 py-4 border-2 border-white rounded-xl cursor-pointer hover:border-blue-400 transition-all duration-200 bg-slate-700 shadow-lg"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-wrap gap-2 min-h-[24px]">
-                          {selectedTags.length === 0 ? (
-                            <span className="text-slate-400">Select tags...</span>
-                          ) : (
-                            selectedTags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="inline-flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-sm font-medium shadow-sm border border-white"
-                              >
-                                {tag}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleRemoveTag(tag)
-                                  }}
-                                  className="w-4 h-4 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors duration-200"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </span>
-                            ))
-                          )}
-                        </div>
-                        <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${
-                          isDropdownOpen ? "rotate-180" : ""
-                        }`} />
-                      </div>
-                    </div>
+                {/* Loading State */}
+                {isLoading && (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                    <p className="text-slate-300">Loading your vault information...</p>
+                  </div>
+                )}
 
-                    {isDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-white rounded-xl shadow-2xl z-10 max-h-64 overflow-y-auto">
-                        <div className="p-4">
-                          <div className="grid grid-cols-2 gap-2">
-                            {VALID_TAGS.map((tag) => (
-                              <button
-                                key={tag}
-                                onClick={() => handleTagToggle(tag)}
-                                className={`px-3 py-2 text-left rounded-lg transition-all duration-200 ${
-                                  selectedTags.includes(tag)
-                                    ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium shadow-sm border border-white"
-                                    : "hover:bg-slate-100 text-slate-700 hover:shadow-sm"
-                                }`}
-                              >
-                                {tag}
-                              </button>
-                            ))}
+                {/* Existing Vault Display */}
+                {!isLoading && hasVault && userTags && userTags.length > 0 && !isEditingTags && (
+                  <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-white rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xl font-bold text-white">Your Current Tags</h3>
+                      <Button
+                        onClick={handleStartEditing}
+                        variant="outline"
+                        size="sm"
+                        className="border-white text-white hover:bg-white/10"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit Tags
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {userTags.map((tag: string) => (
+                        <span
+                          key={tag}
+                          className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full text-sm font-medium shadow-sm border border-white"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-4 text-sm text-slate-300">
+                      You can edit your tags to improve your data profile and earn more FLOW.
+                    </div>
+                  </div>
+                )}
+
+                {/* Tag Selection Interface */}
+                {(!hasVault || isEditingTags) && (
+                  <div className="space-y-6">
+                    <div className="relative">
+                      <div
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        className="w-full px-6 py-4 border-2 border-white rounded-xl cursor-pointer hover:border-blue-400 transition-all duration-200 bg-slate-700 shadow-lg"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-wrap gap-2 min-h-[24px]">
+                            {selectedTags.length === 0 ? (
+                              <span className="text-slate-400">Select tags...</span>
+                            ) : (
+                              selectedTags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="inline-flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-sm font-medium shadow-sm border border-white"
+                                >
+                                  {tag}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleRemoveTag(tag)
+                                    }}
+                                    className="w-4 h-4 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors duration-200"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </span>
+                              ))
+                            )}
+                          </div>
+                          <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${
+                            isDropdownOpen ? "rotate-180" : ""
+                          }`} />
+                        </div>
+                      </div>
+
+                      {isDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-white rounded-xl shadow-2xl z-10 max-h-64 overflow-y-auto">
+                          <div className="p-4">
+                            <div className="grid grid-cols-2 gap-2">
+                              {VALID_TAGS.map((tag) => (
+                                <button
+                                  key={tag}
+                                  onClick={() => handleTagToggle(tag)}
+                                  className={`px-3 py-2 text-left rounded-lg transition-all duration-200 ${
+                                    selectedTags.includes(tag)
+                                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium shadow-sm border border-white"
+                                      : "hover:bg-slate-100 text-slate-700 hover:shadow-sm"
+                                  }`}
+                                >
+                                  {tag}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
 
-                  <div className="text-center">
-                    <Button
-                      onClick={handleApproveProfile}
-                      disabled={selectedTags.length === 0}
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg border border-white"
-                    >
-                      Continue with {selectedTags.length} Tag{selectedTags.length !== 1 ? 's' : ''}
-                    </Button>
+                    <div className="text-center">
+                      <Button
+                        onClick={handleSaveTags}
+                        disabled={selectedTags.length === 0}
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg border border-white"
+                      >
+                        {hasVault ? "Update Tags" : "Continue with"} {selectedTags.length} Tag{selectedTags.length !== 1 ? 's' : ''}
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </Card>
           )}
 
-          {/* Step 3: Create Vault */}
+          {/* Step 3: Create/Update Vault */}
           {currentStep === 3 && (
             <Card className="bg-slate-800 border border-white shadow-2xl shadow-purple-500/20 p-12 max-w-2xl mx-auto">
               <div className="text-center space-y-8">
                 <div className="w-20 h-20 bg-gradient-to-r from-green-500 to-green-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg border border-white">
                   <Shield className="w-10 h-10 text-white" />
                 </div>
-                <h2 className="text-3xl font-bold text-white mb-4">Create Your Data Vault</h2>
+                <h2 className="text-3xl font-bold text-white mb-4">
+                  {hasVault ? "Update Your Data Vault" : "Create Your Data Vault"}
+                </h2>
                 <p className="text-lg text-slate-300 max-w-xl mx-auto">
-                  Sign a transaction to create your public, pseudonymous Data Vault on the blockchain. This is your Web3 identity that companies can query.
+                  {hasVault 
+                    ? "Sign a transaction to update your vault with the new tags on the blockchain."
+                    : "Sign a transaction to create your public, pseudonymous Data Vault on the blockchain. This is your Web3 identity that companies can query."
+                  }
                 </p>
                 
                 <div className="bg-gradient-to-r from-green-500/20 to-green-600/20 border border-white rounded-xl p-6">
@@ -346,11 +425,11 @@ export default function SellDataPage() {
                 </div>
 
                 <Button
-                  onClick={handleCreateVault}
+                  onClick={handleCreateOrUpdateVault}
                   disabled={isCreatingVault}
                   className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white disabled:opacity-50"
                 >
-                  {isCreatingVault ? "Creating Vault..." : "Create Data Vault"}
+                  {isCreatingVault ? "Processing..." : (hasVault ? "Update Data Vault" : "Create Data Vault")}
                 </Button>
               </div>
             </Card>

@@ -4,37 +4,22 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
-import { CreditCard, Users, Search, FileText, Gift, Check, ChevronDown, X, ArrowRight, Wallet } from "lucide-react"
+import { CreditCard, Users, Search, FileText, Gift, Check, ChevronDown, X, ArrowRight, Wallet, LogOut } from "lucide-react"
 import { useWalletConnection, useSearchUsers, useCompanyPayout } from "@/lib/hooks"
 import { VALID_TAGS, ValidTag } from "@/lib/blockchain"
 import { flowToWei } from "@/lib/utils"
-import { WalletStatus, WalletConnectionPrompt } from "@/components/wallet-status"
-
-interface SearchResult {
-  address: string
-  tags: ValidTag[]
-  matchScore: number
-}
+import { VaultInfo } from "@/lib/vault-registry"
 
 export default function BuyDataPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [selectedTags, setSelectedTags] = useState<ValidTag[]>([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchResults, setSearchResults] = useState<VaultInfo[]>([])
   const [searchCost, setSearchCost] = useState(0)
   const [isSearching, setIsSearching] = useState(false)
 
   // Blockchain hooks
-  const { 
-    address, 
-    isConnected, 
-    status, 
-    connect, 
-    connectors, 
-    isPending: isConnecting,
-    isConnecting: isWalletConnecting,
-    isReconnecting 
-  } = useWalletConnection()
+  const { address, isConnected, connect, connectors, isPending: isConnecting, disconnect } = useWalletConnection()
   const { searchUsers, searchResults: apiSearchResults, isSearching: isApiSearching, error: searchError } = useSearchUsers()
   const { buyAccess, isBuyingAccess } = useCompanyPayout()
 
@@ -53,7 +38,7 @@ export default function BuyDataPage() {
     }
   }, [isConnected, currentStep])
 
-  // Handle wallet disconnection and account switching
+  // Handle wallet disconnection
   useEffect(() => {
     if (!isConnected && currentStep > 1) {
       setCurrentStep(1)
@@ -70,11 +55,7 @@ export default function BuyDataPage() {
   }
 
   const handleDisconnectWallet = () => {
-    // Reset all state when disconnecting
-    setCurrentStep(1)
-    setSelectedTags([])
-    setSearchResults([])
-    setSearchCost(0)
+    disconnect()
   }
 
   const handleTagToggle = (tag: ValidTag) => {
@@ -95,9 +76,9 @@ export default function BuyDataPage() {
     setIsSearching(true)
     
     try {
-      // Search for users with selected tags
+      // Search for vaults with selected tags
       searchUsers(selectedTags, {
-        onSuccess: (results: SearchResult[]) => {
+        onSuccess: (results: VaultInfo[]) => {
           setSearchResults(results)
           setSearchCost(results.length * 0.001) // 0.001 FLOW per user
           setCurrentStep(3)
@@ -118,7 +99,7 @@ export default function BuyDataPage() {
   const handleCompleteQuery = () => {
     if (searchResults.length === 0) return
 
-    const userAddresses = searchResults.map(result => result.address)
+    const userAddresses = searchResults.map(result => result.userAddress)
     const totalValue = flowToWei(searchCost)
 
     // Buy access to user data
@@ -155,13 +136,28 @@ export default function BuyDataPage() {
         </div>
 
         {/* Wallet Status Bar */}
-        <div className="mb-8">
-          {isConnected ? (
-            <WalletStatus onDisconnect={handleDisconnectWallet} />
-          ) : (
-            <WalletConnectionPrompt />
-          )}
-        </div>
+        {isConnected && (
+          <div className="mb-8">
+            <Card className="bg-slate-800/50 border border-white/20 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-white font-medium">Wallet Connected</span>
+                  <span className="text-slate-300 text-sm">{address && formatAddress(address)}</span>
+                </div>
+                <Button
+                  onClick={handleDisconnectWallet}
+                  variant="outline"
+                  size="sm"
+                  className="border-red-400 text-red-400 hover:bg-red-400/10 hover:border-red-300"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Disconnect
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Progress Steps */}
         <div className="mb-16">
@@ -207,10 +203,10 @@ export default function BuyDataPage() {
                   {!isConnected ? (
                     <Button
                       onClick={handleConnectWallet}
-                      disabled={isConnecting || isWalletConnecting || isReconnecting}
+                      disabled={isConnecting}
                       className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white disabled:opacity-50"
                     >
-                      {isConnecting || isWalletConnecting || isReconnecting ? "Connecting..." : "Connect MetaMask Wallet"}
+                      {isConnecting ? "Connecting..." : "Connect MetaMask Wallet"}
                     </Button>
                   ) : (
                     <div className="space-y-4">
@@ -399,22 +395,22 @@ export default function BuyDataPage() {
                 <div className="space-y-4">
                   <h3 className="text-xl font-bold text-white">Matching Users</h3>
                   <div className="grid gap-4">
-                    {searchResults.map((user, index) => (
+                    {searchResults.map((vault, index) => (
                       <Card key={index} className="bg-slate-700 border border-white p-6 hover:border-purple-500 transition-all duration-300">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg border border-white">
-                              {user.address.charAt(2).toUpperCase()}
+                              {vault.userAddress.charAt(2).toUpperCase()}
                             </div>
                             <div>
-                              <div className="font-bold text-white text-lg">{formatAddress(user.address)}</div>
+                              <div className="font-bold text-white text-lg">{formatAddress(vault.userAddress)}</div>
                               <div className="text-sm text-slate-300">
-                                Match Score: {(user.matchScore * 100).toFixed(0)}%
+                                Vault: {formatAddress(vault.vaultAddress)}
                               </div>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {user.tags.slice(0, 3).map((tag: string, tagIndex: number) => (
+                            {vault.tags.slice(0, 3).map((tag: string, tagIndex: number) => (
                               <span
                                 key={tagIndex}
                                 className="px-3 py-1 text-xs rounded-full text-white bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg border border-white"
@@ -422,6 +418,11 @@ export default function BuyDataPage() {
                                 {tag}
                               </span>
                             ))}
+                            {vault.tags.length > 3 && (
+                              <span className="px-3 py-1 text-xs rounded-full text-slate-300 bg-slate-600 border border-white">
+                                +{vault.tags.length - 3} more
+                              </span>
+                            )}
                           </div>
                         </div>
                       </Card>

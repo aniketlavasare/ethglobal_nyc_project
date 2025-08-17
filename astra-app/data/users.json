@@ -8,5 +8,26 @@
     ],
     "createdAt": 1755424818011,
     "lastUpdated": 1755425123686
+  },
+  {
+    "address": "0xcba79657ab20a77b94c6f638e1e8f3dfbdb8678a",
+    "tags": [
+      "fashion conscious",
+      "fitness focused"
+    ],
+    "createdAt": 1755427326933,
+    "lastUpdated": 1755427326933
+  },
+  {
+    "address": "0x1001b94af51d37fc084d6ea733a27c53e40e3f0f",
+    "tags": [
+      "crypto enthusiast",
+      "defi user",
+      "fashion conscious",
+      "music lover",
+      "early adopter"
+    ],
+    "createdAt": 1755427579286,
+    "lastUpdated": 1755427579286
   }
 ]
