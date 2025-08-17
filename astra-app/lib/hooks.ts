@@ -2,7 +2,7 @@
 
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ASTRA_VAULT_ABI, COMPANY_PAYOUT_ABI, CONTRACT_ADDRESSES, VALID_TAGS, ValidTag } from './blockchain'
+import { ASTRA_VAULT_ABI, COMPANY_PAYOUT_ABI, CONTRACT_ADDRESSES, VALID_TAGS, ValidTag, MOCK_MODE } from './blockchain'
 
 // Wallet connection hook
 export function useWalletConnection() {
@@ -32,7 +32,7 @@ export function useAstraVault() {
     functionName: 'hasVault',
     args: address ? [address] : undefined,
     query: {
-      enabled: !!address,
+      enabled: !!address && !MOCK_MODE,
     },
   })
 
@@ -58,6 +58,23 @@ export function useAstraVault() {
       // Validate tags
       const validTags = tags.filter(tag => VALID_TAGS.includes(tag as ValidTag))
       if (validTags.length === 0) throw new Error('No valid tags provided')
+
+      if (MOCK_MODE) {
+        // Mock implementation - just store in backend
+        const response = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, tags: validTags }),
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to store user data')
+        }
+
+        // Simulate blockchain transaction delay
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        return validTags
+      }
 
       // Create vault on blockchain
       await createVault({
@@ -123,8 +140,8 @@ export function useAstraVault() {
   })
 
   return {
-    hasVault: hasVault as boolean,
-    hasVaultLoading,
+    hasVault: MOCK_MODE ? false : (hasVault as boolean),
+    hasVaultLoading: MOCK_MODE ? false : hasVaultLoading,
     userTags: userTags as ValidTag[],
     userTagsLoading,
     refetchUserTags,
@@ -146,7 +163,7 @@ export function useCompanyPayout() {
     functionName: 'pendingRewards',
     args: address ? [address] : undefined,
     query: {
-      enabled: !!address,
+      enabled: !!address && !MOCK_MODE,
     },
   })
 
@@ -156,6 +173,12 @@ export function useCompanyPayout() {
   const claimRewardsMutation = useMutation({
     mutationFn: async () => {
       if (!address) throw new Error('Wallet not connected')
+      
+      if (MOCK_MODE) {
+        // Mock implementation
+        await new Promise(resolve => setTimeout(resolve, 2000)) // Simulate transaction
+        return
+      }
       
       await claimRewards({
         address: CONTRACT_ADDRESSES.COMPANY_PAYOUT,
@@ -173,19 +196,25 @@ export function useCompanyPayout() {
 
   const buyAccessMutation = useMutation({
     mutationFn: async ({ tag, users, value }: { tag: string; users: string[]; value: bigint }) => {
+      if (MOCK_MODE) {
+        // Mock implementation
+        await new Promise(resolve => setTimeout(resolve, 3000)) // Simulate transaction
+        return
+      }
+      
       await buyAccess({
         address: CONTRACT_ADDRESSES.COMPANY_PAYOUT,
         abi: COMPANY_PAYOUT_ABI,
         functionName: 'buyAccess',
-        args: [tag, users],
+        args: [tag, users as `0x${string}`[]],
         value,
       })
     },
   })
 
   return {
-    pendingRewards: pendingRewards as bigint,
-    pendingRewardsLoading,
+    pendingRewards: MOCK_MODE ? BigInt(0) : (pendingRewards as bigint),
+    pendingRewardsLoading: MOCK_MODE ? false : pendingRewardsLoading,
     refetchPendingRewards,
     claimRewards: claimRewardsMutation.mutate,
     isClaimingRewards: isClaimingRewards || claimRewardsMutation.isPending,

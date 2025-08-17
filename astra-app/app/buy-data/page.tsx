@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
-import { CreditCard, Users, Search, FileText, Gift, Check, ChevronDown, X, ArrowRight, Wallet, LogOut } from "lucide-react"
+import { CreditCard, Users, Search, FileText, Gift, Check, ChevronDown, X, ArrowRight, Wallet, LogOut, Eye, EyeOff } from "lucide-react"
 import { useWalletConnection, useSearchUsers, useCompanyPayout } from "@/lib/hooks"
 import { VALID_TAGS, ValidTag } from "@/lib/blockchain"
 import { flowToWei } from "@/lib/utils"
@@ -22,6 +22,7 @@ export default function BuyDataPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchCost, setSearchCost] = useState(0)
   const [isSearching, setIsSearching] = useState(false)
+  const [paymentCompleted, setPaymentCompleted] = useState(false)
 
   // Blockchain hooks
   const { address, isConnected, connect, connectors, isPending: isConnecting, disconnect } = useWalletConnection()
@@ -31,9 +32,9 @@ export default function BuyDataPage() {
   const steps = [
     { id: 1, title: "Connect Wallet", description: "Connect your wallet to pay for data" },
     { id: 2, title: "Build Audience", description: "Select data tags to define your target" },
-    { id: 3, title: "Execute Query", description: "Spend FLOW to get matching users" },
-    { id: 4, title: "Receive Data", description: "Get list of matching users" },
-    { id: 5, title: "Reward Users", description: "FLOW automatically distributed to users" }
+    { id: 3, title: "Preview Results", description: "See match count and cost before payment" },
+    { id: 4, title: "Purchase Access", description: "Buy access to user data" },
+    { id: 5, title: "View Results", description: "Access user addresses and details" }
   ]
 
   // Handle step advancement based on state changes
@@ -50,8 +51,27 @@ export default function BuyDataPage() {
       setSelectedTags([])
       setSearchResults([])
       setSearchCost(0)
+      setPaymentCompleted(false)
     }
   }, [isConnected, currentStep])
+
+  // Handle search results from API
+  useEffect(() => {
+    if (apiSearchResults && apiSearchResults.length > 0) {
+      setSearchResults(apiSearchResults)
+      setSearchCost(apiSearchResults.length * 0.001) // 0.001 FLOW per user
+      setCurrentStep(3) // Move to preview step
+    }
+  }, [apiSearchResults])
+
+  // Handle search errors
+  useEffect(() => {
+    if (searchError) {
+      console.error('Search error:', searchError)
+      alert('Failed to search users. Please try again.')
+      setIsSearching(false)
+    }
+  }, [searchError])
 
   const handleConnectWallet = () => {
     if (connectors.length > 0) {
@@ -79,24 +99,16 @@ export default function BuyDataPage() {
     if (selectedTags.length === 0) return
     
     setIsSearching(true)
+    setSearchResults([])
+    setSearchCost(0)
+    setPaymentCompleted(false)
     
     try {
       // Search for users with selected tags
-      searchUsers(selectedTags, {
-        onSuccess: (results: SearchResult[]) => {
-          setSearchResults(results)
-          setSearchCost(results.length * 0.001) // 0.001 FLOW per user
-          setCurrentStep(3)
-        },
-        onError: (error: Error) => {
-          console.error('Search failed:', error)
-          alert('Failed to search users. Please try again.')
-        }
-      })
+      searchUsers(selectedTags)
     } catch (error) {
       console.error('Search error:', error)
       alert('Search failed. Please try again.')
-    } finally {
       setIsSearching(false)
     }
   }
@@ -114,7 +126,8 @@ export default function BuyDataPage() {
       value: totalValue
     }, {
       onSuccess: () => {
-        setCurrentStep(4)
+        setPaymentCompleted(true)
+        setCurrentStep(5) // Move to results step
       },
       onError: (error: Error) => {
         console.error('Failed to buy access:', error)
@@ -346,45 +359,153 @@ export default function BuyDataPage() {
             </Card>
           )}
 
-          {/* Step 3: Execute Query (Brief) */}
+          {/* Step 3: Preview Results (Before Payment) */}
           {currentStep === 3 && (
+            <Card className="bg-slate-800 border border-white shadow-2xl shadow-purple-500/20 p-12 max-w-3xl mx-auto">
+              <div className="space-y-8">
+                <div className="text-center">
+                  <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-6 border border-white">
+                    <EyeOff className="w-10 h-10 text-white" />
+                  </div>
+                  <h2 className="text-3xl font-bold text-white mb-4">Preview Results</h2>
+                  <p className="text-lg text-slate-300">
+                    Here's what we found. Complete your purchase to view the actual user addresses and details.
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-white rounded-xl p-6">
+                  <h3 className="font-medium text-white mb-4">Query Summary</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                    <div>
+                      <div className="text-3xl font-bold text-green-400">{searchResults.length}</div>
+                      <div className="text-sm text-slate-300">Users Found</div>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-blue-400">{searchCost.toFixed(4)}</div>
+                      <div className="text-sm text-slate-300">FLOW Required</div>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-purple-400">0.001</div>
+                      <div className="text-sm text-slate-300">FLOW per User</div>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-pink-400">{selectedTags.length}</div>
+                      <div className="text-sm text-slate-300">Tags Searched</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-xl font-bold text-white">Sample User Profiles (Anonymized)</h3>
+                  <div className="grid gap-4">
+                    {searchResults.slice(0, 3).map((_, index) => (
+                      <Card key={index} className="bg-slate-700 border border-white p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg border border-white">
+                              ?
+                            </div>
+                            <div>
+                              <div className="font-bold text-white text-lg">User #{index + 1}</div>
+                              <div className="text-sm text-slate-300">
+                                Match Score: {Math.floor(Math.random() * 30 + 70)}%
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedTags.slice(0, 2).map((tag: string, tagIndex: number) => (
+                              <span
+                                key={tagIndex}
+                                className="px-3 py-1 text-xs rounded-full text-white bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg border border-white"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            <span className="px-3 py-1 text-xs rounded-full text-slate-300 bg-slate-600 border border-slate-500">
+                              +{Math.floor(Math.random() * 3 + 1)} more
+                            </span>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                    {searchResults.length > 3 && (
+                      <div className="text-center py-4">
+                        <span className="text-slate-400">... and {searchResults.length - 3} more users</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-400 rounded-xl p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <EyeOff className="w-5 h-5 text-yellow-400" />
+                    <h3 className="font-medium text-yellow-400">Privacy Protected</h3>
+                  </div>
+                  <p className="text-sm text-yellow-200">
+                    User addresses and detailed profiles are hidden until payment is completed. This ensures user privacy and prevents data scraping.
+                  </p>
+                </div>
+
+                <div className="text-center space-y-4">
+                  <Button
+                    onClick={handleCompleteQuery}
+                    disabled={isBuyingAccess || searchResults.length === 0}
+                    className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white disabled:opacity-50"
+                  >
+                    {isBuyingAccess ? "Processing..." : `Purchase Access for ${searchCost.toFixed(4)} FLOW`}
+                  </Button>
+                  
+                  <Button
+                    onClick={() => setCurrentStep(2)}
+                    variant="outline"
+                    className="border-white text-white hover:bg-white/10 px-6 py-3 rounded-xl transition-all duration-200"
+                  >
+                    Back to Search
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Step 4: Purchase Access (Brief) */}
+          {currentStep === 4 && (
             <Card className="bg-slate-800 border border-white shadow-2xl shadow-purple-500/20 p-12 max-w-2xl mx-auto">
               <div className="text-center space-y-8">
                 <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg border border-white">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
                 </div>
-                <h2 className="text-3xl font-bold text-white mb-4">Executing Query...</h2>
+                <h2 className="text-3xl font-bold text-white mb-4">Processing Purchase...</h2>
                 <p className="text-lg text-slate-300">
-                  Processing your audience request and matching users based on selected tags.
+                  Completing your purchase and distributing FLOW to users.
                 </p>
               </div>
             </Card>
           )}
 
-          {/* Step 4: Receive Data */}
-          {currentStep === 4 && (
+          {/* Step 5: View Results (After Payment) */}
+          {currentStep === 5 && paymentCompleted && (
             <Card className="bg-slate-800 border border-white shadow-2xl shadow-purple-500/20 p-12 max-w-5xl mx-auto">
               <div className="space-y-8">
                 <div className="text-center">
                   <div className="w-20 h-20 bg-gradient-to-r from-green-500 to-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-6 border border-white">
-                    <FileText className="w-10 h-10 text-white" />
+                    <Eye className="w-10 h-10 text-white" />
                   </div>
-                  <h2 className="text-3xl font-bold text-white mb-4">Query Results</h2>
+                  <h2 className="text-3xl font-bold text-white mb-4">Access Granted!</h2>
                   <p className="text-lg text-slate-300">
-                    Here are the users that match your criteria. You can now purchase access to their data.
+                    Your purchase was successful. Here are the user addresses and details you now have access to.
                   </p>
                 </div>
 
                 <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-white rounded-xl p-6">
-                  <h3 className="font-medium text-white mb-4">Query Summary</h3>
+                  <h3 className="font-medium text-white mb-4">Transaction Summary</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                     <div>
                       <div className="text-2xl font-bold text-green-400">{searchResults.length}</div>
-                      <div className="text-sm text-slate-300">Users Found</div>
+                      <div className="text-sm text-slate-300">Users Purchased</div>
                     </div>
                     <div>
                       <div className="text-2xl font-bold text-blue-400">{searchCost.toFixed(4)}</div>
-                      <div className="text-sm text-slate-300">FLOW Required</div>
+                      <div className="text-sm text-slate-300">FLOW Spent</div>
                     </div>
                     <div>
                       <div className="text-2xl font-bold text-purple-400">0.001</div>
@@ -392,13 +513,13 @@ export default function BuyDataPage() {
                     </div>
                     <div>
                       <div className="text-2xl font-bold text-pink-400">{selectedTags.length}</div>
-                      <div className="text-sm text-slate-300">Tags Searched</div>
+                      <div className="text-sm text-slate-300">Tags Matched</div>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-white">Matching Users</h3>
+                  <h3 className="text-xl font-bold text-white">User Addresses & Details</h3>
                   <div className="grid gap-4">
                     {searchResults.map((user, index) => (
                       <Card key={index} className="bg-slate-700 border border-white p-6 hover:border-purple-500 transition-all duration-300">
@@ -423,54 +544,15 @@ export default function BuyDataPage() {
                                 {tag}
                               </span>
                             ))}
+                            {user.tags.length > 3 && (
+                              <span className="px-3 py-1 text-xs rounded-full text-slate-300 bg-slate-600 border border-slate-500">
+                                +{user.tags.length - 3} more
+                              </span>
+                            )}
                           </div>
                         </div>
                       </Card>
                     ))}
-                  </div>
-                </div>
-
-                <div className="text-center">
-                  <Button
-                    onClick={handleCompleteQuery}
-                    disabled={isBuyingAccess}
-                    className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white disabled:opacity-50"
-                  >
-                    {isBuyingAccess ? "Processing..." : `Purchase Access for ${searchCost.toFixed(4)} FLOW`}
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Step 5: Reward Users */}
-          {currentStep === 5 && (
-            <Card className="bg-slate-800 border border-white shadow-2xl shadow-purple-500/20 p-12 max-w-3xl mx-auto">
-              <div className="text-center space-y-8">
-                <div className="w-20 h-20 bg-gradient-to-r from-yellow-500 to-green-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg border border-white">
-                  <Gift className="w-10 h-10 text-white" />
-                </div>
-                <h2 className="text-3xl font-bold text-white mb-4">Users Rewarded!</h2>
-                <p className="text-lg text-slate-300 max-w-2xl mx-auto">
-                  The FLOW value you spent has been automatically distributed to the users whose data was included in your query.
-                </p>
-                
-                <div className="bg-gradient-to-r from-yellow-500/20 to-green-500/20 border border-white rounded-xl p-6">
-                  <h3 className="font-medium text-white mb-4">Transaction Summary</h3>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-green-400">{searchCost.toFixed(4)} FLOW</div>
-                      <div className="text-sm text-slate-300">Total Distributed</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-blue-400">{searchResults.length}</div>
-                      <div className="text-sm text-slate-300">Users Rewarded</div>
-                    </div>
-                  </div>
-                  <div className="mt-4 text-center">
-                    <div className="text-sm text-slate-300">
-                      Each user received: {(searchCost / searchResults.length).toFixed(6)} FLOW
-                    </div>
                   </div>
                 </div>
 
@@ -511,6 +593,21 @@ export default function BuyDataPage() {
                       Direct Message
                     </Button>
                   </div>
+                </div>
+
+                <div className="space-y-4">
+                  <Button
+                    onClick={() => {
+                      setCurrentStep(1)
+                      setSelectedTags([])
+                      setSearchResults([])
+                      setSearchCost(0)
+                      setPaymentCompleted(false)
+                    }}
+                    className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 text-white text-lg font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg border border-white"
+                  >
+                    Start New Search
+                  </Button>
                 </div>
               </div>
             </Card>

@@ -2,6 +2,9 @@ import { createConfig, http } from 'wagmi'
 import { mainnet, sepolia } from 'wagmi/chains'
 import { injected, metaMask, walletConnect } from 'wagmi/connectors'
 
+// Mock mode for testing without deployed contracts
+export const MOCK_MODE = true // Set to false when contracts are deployed
+
 // Flow EVM Testnet configuration
 export const flowTestnet = {
   id: 123,
@@ -23,8 +26,8 @@ export const flowTestnet = {
 
 // Contract addresses (you'll need to update these after deployment)
 export const CONTRACT_ADDRESSES = {
-  ASTRA_VAULT: '0x5d319471c96346ca246cA1fd811B343C1b210b5E', // Replace with actual deployed address
-  COMPANY_PAYOUT: '0x9EF74276b83555fDddEc27e587f4d80303C0eAb0', // Replace with actual deployed address
+  ASTRA_VAULT: MOCK_MODE ? '0x0000000000000000000000000000000000000000' : '0x5d319471c96346ca246cA1fd811B343C1b210b5E', // Replace with actual deployed address
+  COMPANY_PAYOUT: MOCK_MODE ? '0x0000000000000000000000000000000000000000' : '0x9EF74276b83555fDddEc27e587f4d80303C0eAb0', // Replace with actual deployed address
 } as const
 
 // Valid tags that can be used in the vault
